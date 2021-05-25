@@ -1,6 +1,6 @@
 import os
 import os.path
-import signal
+from sys import exit
 import subprocess
 import json
 import datetime
@@ -161,8 +161,8 @@ class Exporter():
 
     def update_basebackup(self, *unused):
         """
-            When this script receive a SIGHUP signal, it will call backup-list
-            and update metrics about basebackups
+            This function executes every x seconds, set via BASEBACKUP_UPDATE env variable (defaults to 10).
+            It will call backup-list and update metrics about basebackups.
         """
 
         info('Updating basebackups metrics...')
@@ -296,8 +296,15 @@ if __name__ == '__main__':
     # Launch exporter
     exporter = Exporter()
 
-    # listen to SIGHUP signal
-    signal.signal(signal.SIGHUP, exporter.update_basebackup)
+    basebackup_update_seconds = int(os.getenv('BASEBACKUP_UPDATE', '10'))
+    if basebackup_update_seconds <= 0:
+        print('BASEBACKUP_UPDATE has to be greater than 0')
+        exit(1)
 
+    basebackup_countdown = basebackup_update_seconds
     while True:
+        if basebackup_countdown <= 0:
+            exporter.update_basebackup()
+            basebackup_countdown = basebackup_update_seconds
         time.sleep(1)
+        basebackup_countdown -= 1
