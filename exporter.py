@@ -103,7 +103,7 @@ class Exporter():
 
     def __init__(self):
         self.basebackup_exception = False
-        self.xlog_exception = False
+        self.wal_exception = False
         self.bbs = []
         self.last_archive_check = None
         self.archive_status = None
@@ -119,8 +119,8 @@ class Exporter():
         self.last_upload = Gauge('walg_last_upload',
                                  'Last upload of incremental or full backup',
                                  ['type'])
-        self.last_upload.labels('xlog').set_function(
-            self.last_xlog_upload_callback)
+        self.last_upload.labels('wal').set_function(
+            self.last_wal_upload_callback)
         self.last_upload.labels('basebackup').set_function(
             lambda: self.bbs[len(self.bbs) - 1]['start_time'].timestamp()
             if self.bbs else 0
@@ -131,21 +131,21 @@ class Exporter():
             lambda: self.bbs[0]['start_time'].timestamp() if self.bbs else 0
         )
 
-        self.xlog_ready = Gauge('walg_missing_remote_wal_segment_at_end',
-                                'Xlog ready for upload')
-        self.xlog_ready.set_function(self.xlog_ready_callback)
+        self.wal_ready = Gauge('walg_missing_remote_wal_segment_at_end',
+                                'Wal ready for upload')
+        self.wal_ready.set_function(self.wal_ready_callback)
 
         self.exception = Gauge('walg_exception',
                                'Wal-g exception: 2 for basebackup error, '
-                               '3 for xlog error and '
+                               '3 for wal error and '
                                '5 for remote error')
         self.exception.set_function(
             lambda: (1 if self.basebackup_exception else 0 +
-                     2 if self.xlog_exception else 0))
+                     2 if self.wal_exception else 0))
 
-        self.xlog_since_last_bb = Gauge('walg_xlogs_since_basebackup',
-                                        'Xlog uploaded since last base backup')
-        self.xlog_since_last_bb.set_function(self.xlog_since_last_bb_callback)
+        self.wal_since_last_bb = Gauge('walg_wals_since_basebackup',
+                                        'Wal uploaded since last base backup')
+        self.wal_since_last_bb.set_function(self.wal_since_last_bb_callback)
 
         self.last_backup_duration = Gauge('walg_last_backup_duration',
                                           'Duration of the last full backup')
@@ -233,24 +233,24 @@ class Exporter():
                     raise Exception("Cannot fetch archive status")
                 return res
 
-    def last_xlog_upload_callback(self):
+    def last_wal_upload_callback(self):
         archive_status = self.last_archive_status()
         return archive_status['last_archived_time'].timestamp()
 
-    def xlog_ready_callback(self):
+    def wal_ready_callback(self):
         res = 0
         try:
             for f in os.listdir(archive_dir):
-                # search for xlog waiting for upload
+                # search for wal waiting for upload
                 if READY_WAL_RE.match(f):
                     res += 1
-            self.xlog_exception = 0
+            self.wal_exception = 0
         except FileNotFoundError:
-            self.xlog_exception = 1
+            self.wal_exception = 1
         return res
 
-    def xlog_since_last_bb_callback(self):
-        # Compute xlog_since_last_basebackup
+    def wal_since_last_bb_callback(self):
+        # Compute wal_since_last_basebackup
         if self.bbs:
             archive_status = self.last_archive_status()
             return wal_diff(archive_status['last_archived_wal'],
